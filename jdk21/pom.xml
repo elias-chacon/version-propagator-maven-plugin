@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xmlns="http://maven.apache.org/POM/4.0.0"
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>io.github.eliaschacon</groupId>
+		<artifactId>version-propagator-parent</artifactId>
+		<version>1.0.2-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>version-propagator-jdk21</artifactId>
+	<name>Version Propagator Plugin :: jdk21</name>
+	<description>Java 21 implementations (virtual threads), stored under META-INF/versions/21 of the plugin JAR.
+	</description>
+
+	<properties>
+		<maven.compiler.release>21</maven.compiler.release>
+		<!-- This code only ever runs on Java 21+: no test runs on the 8, 11 and 17 toolchains. -->
+		<tests.legacyJdks.skip>true</tests.legacyJdks.skip>
+		<!-- Internal module: embedded in the plugin JAR, never published on its own. -->
+		<maven.deploy.skip>true</maven.deploy.skip>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>version-propagator-common</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>version-propagator-common</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+</project>

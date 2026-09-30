@@ -1,0 +1,68 @@
+name: CI
+
+on:
+    push:
+        branches: [ main ]
+    pull_request:
+        branches: [ main ]
+
+# One run per ref at a time: the badge commit must not race with another run on main.
+concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    contents: write
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            -   uses: actions/checkout@v5
+
+            # Installs the four JDKs and writes ~/.m2/toolchains.xml for them. The last one (21) becomes JAVA_HOME:
+            # the build runs on 21 and the tests also run on the 8, 11 and 17 toolchains.
+            -   name: Set up JDKs 8, 11, 17 and 21
+                uses: actions/setup-java@v5
+                with:
+                    distribution: 'temurin'
+                    java-version: |
+                        8
+                        11
+                        17
+                        21
+                    cache: 'maven'
+
+            -   name: Build and run tests on Java 8, 11, 17 and 21
+                run: mvn -B clean verify
+
+            -   name: Generate coverage badges
+                uses: cicirello/jacoco-badge-generator@v2
+                with:
+                    jacoco-csv-file: plugin/target/site/jacoco-aggregate/jacoco.csv
+                    badges-directory: .github/badges
+                    generate-branches-badge: true
+
+            # Only on pushes to main, never on pull requests. A push made with GITHUB_TOKEN does not trigger
+            # workflows; "[skip ci]" is an extra guard. Fails if main forbids direct pushes by github-actions[bot].
+            -   name: Commit coverage badges
+                if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+                run: |
+                    if [ -n "$(git status --porcelain .github/badges)" ]; then
+                        git config user.name 'github-actions[bot]'
+                        git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+                        git add .github/badges
+                        git commit -m 'chore: update coverage badges [skip ci]'
+                        git push
+                    else
+                        echo 'Coverage badges unchanged.'
+                    fi
+
+            -   name: Upload coverage to Codecov
+                uses: codecov/codecov-action@v5
+                with:
+                    token: ${{ secrets.CODECOV_TOKEN }}
+                    files: plugin/target/site/jacoco-aggregate/jacoco.xml
+                    flags: unittests
+                    name: codecov-umbrella

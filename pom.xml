@@ -4,20 +4,37 @@
 		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<!-- Plugin coordinates: change these three values to publish under your own namespace. -->
-	<groupId>io.github.eliaschacon</groupId>
-	<artifactId>version-propagator-maven-plugin</artifactId>
-	<version>0.11.0-SNAPSHOT</version>
-	<packaging>maven-plugin</packaging>
+	<!--
+		Parent of the Version Propagator Plugin. The published artifact is built by the "plugin" module:
+		a single Multi-Release JAR (Java 8 base + Java 21 classes under META-INF/versions/21).
 
-	<name>Version Propagator Plugin</name>
+		Modules:
+		  common  - platform independent code (release 8)
+		  jdk8    - Java 8 implementations, base of the Multi-Release JAR (release 8)
+		  jdk21   - Java 21 implementations, loaded by Java 21+ JVMs (release 21)
+		  plugin  - the Maven goal and the packaging of the Multi-Release JAR (release 8)
+		Java 11 and 17 have no specific code: the Java 8 base runs unchanged on them (tested on both).
+
+		Maven runs on any JDK 11+. On JDK 21+ nothing else is needed for the Java 21 part: it is compiled and tested on
+		the Maven JVM. On JDK 11 to 20 a JDK 21 toolchain is required (profile maven-jvm-below-21). Toolchains 1.8, 11
+		and 17 run the tests again on those JVMs; without them use -Dtests.legacyJdks.skip=true.
+	-->
+	<groupId>io.github.eliaschacon</groupId>
+	<artifactId>version-propagator-parent</artifactId>
+	<version>1.0.2-SNAPSHOT</version>
+	<packaging>pom</packaging>
+
+	<name>Version Propagator Plugin (parent)</name>
 	<description>Bumps the project version (major, minor, patch or build) in the POM and propagates it to additional
 		files.
 	</description>
 
-	<prerequisites>
-		<maven>3.6.3</maven>
-	</prerequisites>
+	<modules>
+		<module>common</module>
+		<module>jdk8</module>
+		<module>jdk21</module>
+		<module>plugin</module>
+	</modules>
 
 	<distributionManagement>
 		<repository>
@@ -27,11 +44,13 @@
 	</distributionManagement>
 
 	<properties>
-		<java.version>8</java.version>
-		<maven.compiler.source>${java.version}</maven.compiler.source>
-		<maven.compiler.target>${java.version}</maven.compiler.target>
+		<!-- Base bytecode level; the jdk21 module overrides it. -->
+		<maven.compiler.release>8</maven.compiler.release>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+		<!-- Run the tests on the JDK 8, 11 and 17 toolchains too (the Maven JVM covers 21). -->
+		<tests.legacyJdks.skip>false</tests.legacyJdks.skip>
 
 		<maven.api.version>3.9.9</maven.api.version>
 		<maven.plugin.tools.version>3.15.1</maven.plugin.tools.version>
@@ -40,46 +59,74 @@
 
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
+		<maven-failsafe-plugin.version>3.2.5</maven-failsafe-plugin.version>
 		<maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
 		<maven-jar-plugin.version>3.4.1</maven-jar-plugin.version>
+		<maven-dependency-plugin.version>3.7.0</maven-dependency-plugin.version>
 		<maven-install-plugin.version>3.1.2</maven-install-plugin.version>
 		<maven-deploy-plugin.version>3.1.2</maven-deploy-plugin.version>
+		<maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
 		<jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
 		<sonar-maven-plugin.version>5.0.0.4389</sonar-maven-plugin.version>
 	</properties>
 
-	<dependencies>
-		<!-- Maven runtime APIs are supplied by Maven itself when the plugin runs. -->
-		<dependency>
-			<groupId>org.apache.maven</groupId>
-			<artifactId>maven-plugin-api</artifactId>
-			<version>${maven.api.version}</version>
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.maven</groupId>
-			<artifactId>maven-core</artifactId>
-			<version>${maven.api.version}</version>
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.maven.plugin-tools</groupId>
-			<artifactId>maven-plugin-annotations</artifactId>
-			<version>${maven.plugin.tools.version}</version>
-			<scope>provided</scope>
-		</dependency>
-		<!-- Compile-time only: generates accessors/builders, nothing is shipped with the plugin. -->
-		<dependency>
-			<groupId>org.projectlombok</groupId>
-			<artifactId>lombok</artifactId>
-			<version>${lombok.version}</version>
-			<scope>provided</scope>
-		</dependency>
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>${project.groupId}</groupId>
+				<artifactId>version-propagator-common</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>${project.groupId}</groupId>
+				<artifactId>version-propagator-common</artifactId>
+				<version>${project.version}</version>
+				<type>test-jar</type>
+			</dependency>
+			<dependency>
+				<groupId>${project.groupId}</groupId>
+				<artifactId>version-propagator-jdk8</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>${project.groupId}</groupId>
+				<artifactId>version-propagator-jdk21</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 
+			<!-- Maven runtime APIs are supplied by Maven itself when the plugin runs. -->
+			<dependency>
+				<groupId>org.apache.maven</groupId>
+				<artifactId>maven-plugin-api</artifactId>
+				<version>${maven.api.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.maven</groupId>
+				<artifactId>maven-core</artifactId>
+				<version>${maven.api.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.maven.plugin-tools</groupId>
+				<artifactId>maven-plugin-annotations</artifactId>
+				<version>${maven.plugin.tools.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.projectlombok</groupId>
+				<artifactId>lombok</artifactId>
+				<version>${lombok.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter</artifactId>
+				<version>${junit.version}</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<dependencies>
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
-			<version>${junit.version}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -92,7 +139,11 @@
 					<artifactId>maven-compiler-plugin</artifactId>
 					<version>${maven-compiler-plugin.version}</version>
 					<configuration>
-						<!-- Explicit processor path: required by recent JDKs, harmless on Java 8. -->
+						<compilerArgs>
+							<!-- JDK 21 warns that release 8 is obsolete: expected, the base level is intentional. -->
+							<arg>-Xlint:-options</arg>
+						</compilerArgs>
+						<!-- Explicit processor path: required by recent JDKs. -->
 						<annotationProcessorPaths>
 							<path>
 								<groupId>org.projectlombok</groupId>
@@ -102,10 +153,61 @@
 						</annotationProcessorPaths>
 					</configuration>
 				</plugin>
+				<!--
+					The default execution runs on the Maven JVM when it is 21+ (on an older Maven JVM, the profile
+					maven-jvm-below-21 moves it to the JDK 21 toolchain). The extra executions run the same tests on the JDK 8,
+					11 and 17 toolchains (the jdk21 module turns them off; -Dtests.legacyJdks.skip=true turns them off everywhere).
+				-->
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-surefire-plugin</artifactId>
 					<version>${maven-surefire-plugin.version}</version>
+					<executions>
+						<execution>
+							<id>test-jdk8</id>
+							<goals>
+								<goal>test</goal>
+							</goals>
+							<configuration>
+								<skip>${tests.legacyJdks.skip}</skip>
+								<jdkToolchain>
+									<version>[1.8,1.9),[8,9)</version>
+								</jdkToolchain>
+								<reportsDirectory>${project.build.directory}/surefire-reports-jdk8</reportsDirectory>
+							</configuration>
+						</execution>
+						<execution>
+							<id>test-jdk11</id>
+							<goals>
+								<goal>test</goal>
+							</goals>
+							<configuration>
+								<skip>${tests.legacyJdks.skip}</skip>
+								<jdkToolchain>
+									<version>[11,12)</version>
+								</jdkToolchain>
+								<reportsDirectory>${project.build.directory}/surefire-reports-jdk11</reportsDirectory>
+							</configuration>
+						</execution>
+						<execution>
+							<id>test-jdk17</id>
+							<goals>
+								<goal>test</goal>
+							</goals>
+							<configuration>
+								<skip>${tests.legacyJdks.skip}</skip>
+								<jdkToolchain>
+									<version>[17,18)</version>
+								</jdkToolchain>
+								<reportsDirectory>${project.build.directory}/surefire-reports-jdk17</reportsDirectory>
+							</configuration>
+						</execution>
+					</executions>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-failsafe-plugin</artifactId>
+					<version>${maven-failsafe-plugin.version}</version>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
@@ -119,6 +221,11 @@
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-dependency-plugin</artifactId>
+					<version>${maven-dependency-plugin.version}</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-install-plugin</artifactId>
 					<version>${maven-install-plugin.version}</version>
 				</plugin>
@@ -127,64 +234,144 @@
 					<artifactId>maven-deploy-plugin</artifactId>
 					<version>${maven-deploy-plugin.version}</version>
 				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-plugin-plugin</artifactId>
+					<version>${maven.plugin.tools.version}</version>
+				</plugin>
+				<plugin>
+					<groupId>org.sonarsource.scanner.maven</groupId>
+					<artifactId>sonar-maven-plugin</artifactId>
+					<version>${sonar-maven-plugin.version}</version>
+				</plugin>
 			</plugins>
 		</pluginManagement>
 
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-plugin-plugin</artifactId>
-				<version>${maven.plugin.tools.version}</version>
-				<configuration>
-					<!-- Enables the short form "mvn propagate:bump" (declared in the POM or groupId in pluginGroups). -->
-					<goalPrefix>propagate</goalPrefix>
-				</configuration>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>${maven-enforcer-plugin.version}</version>
+				<executions>
+					<execution>
+						<id>enforce-build-environment</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireJavaVersion>
+									<version>[11,)</version>
+									<message>Maven must run on JDK 11+ (21+ needs no toolchain for the Java 21 part; 11 to 20 need a JDK
+										21 toolchain). Toolchains 1.8, 11 and 17 run the tests again on those JVMs (skip them with
+										-Dtests.legacyJdks.skip=true). The plugin itself runs on Java 8+.
+									</message>
+								</requireJavaVersion>
+								<requireMavenVersion>
+									<version>[3.6.3,)</version>
+								</requireMavenVersion>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<!-- Coverage for every module (CI badges, Codecov and SonarQube). -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco-maven-plugin.version}</version>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>
 
 	<profiles>
 		<!--
-			SonarQube analysis, isolated from the regular build:
+			Maven on JDK 11 to 20 cannot compile release 21 nor run the Java 21 code: compile everything and run the default
+			tests on the JDK 21 toolchain instead. Activated automatically by the JDK that runs Maven.
+		-->
+		<profile>
+			<id>maven-jvm-below-21</id>
+			<activation>
+				<jdk>(,21)</jdk>
+			</activation>
+			<build>
+				<pluginManagement>
+					<plugins>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-compiler-plugin</artifactId>
+							<configuration>
+								<jdkToolchain>
+									<version>[21,22)</version>
+								</jdkToolchain>
+							</configuration>
+						</plugin>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-surefire-plugin</artifactId>
+							<executions>
+								<execution>
+									<id>default-test</id>
+									<configuration>
+										<jdkToolchain>
+											<version>[21,22)</version>
+										</jdkToolchain>
+									</configuration>
+								</execution>
+							</executions>
+						</plugin>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-failsafe-plugin</artifactId>
+							<executions>
+								<execution>
+									<id>it-jdk21</id>
+									<configuration>
+										<jdkToolchain>
+											<version>[21,22)</version>
+										</jdkToolchain>
+									</configuration>
+								</execution>
+							</executions>
+						</plugin>
+					</plugins>
+				</pluginManagement>
+			</build>
+		</profile>
+
+		<!--
+			SonarQube analysis, isolated from the regular build (Maven on JDK 21):
 				mvn -Psonar clean verify sonar:sonar -Dsonar.token=<token>
-			JaCoCo instruments the unit tests and writes target/site/jacoco/jacoco.xml, which is sent to SonarQube.
+			The project key is the default one of the root (io.github.eliaschacon:version-propagator-parent).
+			Do not set sonar.projectKey (POM or command line): it is applied to every module, all modules get the
+			root key and the scanner fails with a StackOverflowError in the module hierarchy.
 		-->
 		<profile>
 			<id>sonar</id>
 			<properties>
 				<sonar.host.url>http://localhost:9000</sonar.host.url>
-				<sonar.projectKey>${project.groupId}:${project.artifactId}</sonar.projectKey>
-				<sonar.projectName>${project.name}</sonar.projectName>
-				<sonar.java.source>${java.version}</sonar.java.source>
-				<sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml
-				</sonar.coverage.jacoco.xmlReportPaths>
+				<sonar.java.source>${maven.compiler.release}</sonar.java.source>
 			</properties>
 			<build>
 				<plugins>
 					<plugin>
-						<groupId>org.jacoco</groupId>
-						<artifactId>jacoco-maven-plugin</artifactId>
-						<version>${jacoco-maven-plugin.version}</version>
-						<executions>
-							<execution>
-								<id>prepare-agent</id>
-								<goals>
-									<goal>prepare-agent</goal>
-								</goals>
-							</execution>
-							<execution>
-								<id>report</id>
-								<phase>verify</phase>
-								<goals>
-									<goal>report</goal>
-								</goals>
-							</execution>
-						</executions>
-					</plugin>
-					<plugin>
 						<groupId>org.sonarsource.scanner.maven</groupId>
 						<artifactId>sonar-maven-plugin</artifactId>
-						<version>${sonar-maven-plugin.version}</version>
 					</plugin>
 				</plugins>
 			</build>

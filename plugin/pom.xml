@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xmlns="http://maven.apache.org/POM/4.0.0"
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>io.github.eliaschacon</groupId>
+		<artifactId>version-propagator-parent</artifactId>
+		<version>1.0.2-SNAPSHOT</version>
+	</parent>
+
+	<!--
+		The published plugin: one Multi-Release JAR that runs on Java 8+.
+		  - root:                     this module (goal + plugin descriptor), common and jdk8 classes
+		  - META-INF/versions/21/:    jdk21 classes, loaded instead of the jdk8 ones by Java 21+ JVMs
+		The internal modules are embedded (unpacked), so they are "provided" here and never published.
+	-->
+	<artifactId>version-propagator-maven-plugin</artifactId>
+	<packaging>maven-plugin</packaging>
+	<name>Version Propagator Plugin</name>
+	<description>Bumps the project version (major, minor, patch or build) in the POM and propagates it to additional
+		files.
+	</description>
+
+	<prerequisites>
+		<maven>3.6.3</maven>
+	</prerequisites>
+
+	<properties>
+		<multi-release.directory>${project.build.directory}/multi-release</multi-release.directory>
+		<jdk21.artifact>${project.groupId}:version-propagator-jdk21</jdk21.artifact>
+	</properties>
+
+	<dependencies>
+		<!-- Embedded in the JAR at prepare-package: provided, so consumers never resolve them. -->
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>version-propagator-common</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>version-propagator-jdk8</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<!--
+			Embedded under META-INF/versions/21. Declared after jdk8 on purpose: both have the same class names, so
+			the compiler resolves the jdk8 (release 8) ones; the tests exclude it from their classpath.
+		-->
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>version-propagator-jdk21</artifactId>
+			<scope>provided</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.maven</groupId>
+			<artifactId>maven-plugin-api</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.maven</groupId>
+			<artifactId>maven-core</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.maven.plugin-tools</groupId>
+			<artifactId>maven-plugin-annotations</artifactId>
+			<scope>provided</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-plugin-plugin</artifactId>
+				<configuration>
+					<!-- Enables the short form "mvn propagate:bump" (declared in the POM or groupId in pluginGroups). -->
+					<goalPrefix>propagate</goalPrefix>
+					<!--
+						Explicit: otherwise it is detected from the highest bytecode among the dependencies, which is the
+						jdk21 module (release 21), and Maven would refuse to run the plugin on Java 8 to 20.
+					-->
+					<requiredJavaVersion>1.8</requiredJavaVersion>
+				</configuration>
+			</plugin>
+
+			<!-- Unit tests on every JVM (see parent); the jdk21 classes must never shadow the jdk8 ones. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<classpathDependencyExcludes>
+						<classpathDependencyExclude>${jdk21.artifact}</classpathDependencyExclude>
+					</classpathDependencyExcludes>
+				</configuration>
+			</plugin>
+
+			<!-- Multi-Release JAR layout, assembled in target/multi-release. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-resources-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>multi-release-plugin-classes</id>
+						<phase>prepare-package</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${multi-release.directory}</outputDirectory>
+							<resources>
+								<resource>
+									<directory>${project.build.outputDirectory}</directory>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>multi-release-base</id>
+						<phase>prepare-package</phase>
+						<goals>
+							<goal>unpack</goal>
+						</goals>
+						<configuration>
+							<artifactItems>
+								<artifactItem>
+									<groupId>${project.groupId}</groupId>
+									<artifactId>version-propagator-common</artifactId>
+									<version>${project.version}</version>
+								</artifactItem>
+								<artifactItem>
+									<groupId>${project.groupId}</groupId>
+									<artifactId>version-propagator-jdk8</artifactId>
+									<version>${project.version}</version>
+								</artifactItem>
+							</artifactItems>
+							<outputDirectory>${multi-release.directory}</outputDirectory>
+							<excludes>META-INF/**</excludes>
+						</configuration>
+					</execution>
+					<execution>
+						<id>multi-release-21</id>
+						<phase>prepare-package</phase>
+						<goals>
+							<goal>unpack</goal>
+						</goals>
+						<configuration>
+							<artifactItems>
+								<artifactItem>
+									<groupId>${project.groupId}</groupId>
+									<artifactId>version-propagator-jdk21</artifactId>
+									<version>${project.version}</version>
+								</artifactItem>
+							</artifactItems>
+							<outputDirectory>${multi-release.directory}/META-INF/versions/21</outputDirectory>
+							<excludes>META-INF/**</excludes>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<classesDirectory>${multi-release.directory}</classesDirectory>
+					<archive>
+						<manifestEntries>
+							<Multi-Release>true</Multi-Release>
+							<Automatic-Module-Name>io.github.eliaschacon.versionbump</Automatic-Module-Name>
+						</manifestEntries>
+					</archive>
+				</configuration>
+			</plugin>
+
+			<!-- Checks the packaged JAR on every JVM: the right PlatformTaskRunner is loaded. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<configuration>
+					<classpathDependencyExcludes>
+						<classpathDependencyExclude>${jdk21.artifact}</classpathDependencyExclude>
+					</classpathDependencyExcludes>
+					<systemPropertyVariables>
+						<plugin.jar>${project.build.directory}/${project.build.finalName}.jar</plugin.jar>
+					</systemPropertyVariables>
+				</configuration>
+				<executions>
+					<execution>
+						<id>it-jdk21</id>
+						<goals>
+							<goal>integration-test</goal>
+						</goals>
+						<configuration>
+							<reportsDirectory>${project.build.directory}/failsafe-reports-jdk21</reportsDirectory>
+						</configuration>
+					</execution>
+					<execution>
+						<id>it-jdk8</id>
+						<goals>
+							<goal>integration-test</goal>
+						</goals>
+						<configuration>
+							<skip>${tests.legacyJdks.skip}</skip>
+							<jdkToolchain>
+								<version>[1.8,1.9),[8,9)</version>
+							</jdkToolchain>
+							<reportsDirectory>${project.build.directory}/failsafe-reports-jdk8</reportsDirectory>
+						</configuration>
+					</execution>
+					<execution>
+						<id>it-jdk11</id>
+						<goals>
+							<goal>integration-test</goal>
+						</goals>
+						<configuration>
+							<skip>${tests.legacyJdks.skip}</skip>
+							<jdkToolchain>
+								<version>[11,12)</version>
+							</jdkToolchain>
+							<reportsDirectory>${project.build.directory}/failsafe-reports-jdk11</reportsDirectory>
+						</configuration>
+					</execution>
+					<execution>
+						<id>it-jdk17</id>
+						<goals>
+							<goal>integration-test</goal>
+						</goals>
+						<configuration>
+							<skip>${tests.legacyJdks.skip}</skip>
+							<jdkToolchain>
+								<version>[17,18)</version>
+							</jdkToolchain>
+							<reportsDirectory>${project.build.directory}/failsafe-reports-jdk17</reportsDirectory>
+						</configuration>
+					</execution>
+					<execution>
+						<id>verify</id>
+						<goals>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- Coverage of all modules in one report (CI badges and Codecov). -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>report-aggregate</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report-aggregate</goal>
+						</goals>
+						<configuration>
+							<includeCurrentProject>true</includeCurrentProject>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>

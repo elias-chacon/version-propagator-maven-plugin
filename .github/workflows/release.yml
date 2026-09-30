@@ -1,9 +1,10 @@
 name: Release
 
+# Publishes the plugin to GitHub Packages when a tag "v<version>" is pushed (e.g. v1.0.0 for POM version 1.0.0).
 on:
     push:
         tags:
-            - 'v*-jdk8'
+            - 'v*'
 
 jobs:
     build-and-publish:
@@ -15,19 +16,34 @@ jobs:
         steps:
             -   uses: actions/checkout@v5
 
-            -   name: Set up JDK
+            # JDKs for the build (21) and the test toolchains (8, 11, 17). server-id writes the credentials of the
+            # "github" repository to ~/.m2/settings.xml (username: GITHUB_ACTOR, password: GITHUB_TOKEN).
+            -   name: Set up JDKs 8, 11, 17 and 21
                 uses: actions/setup-java@v5
                 with:
-                    java-version: '1.8'
                     distribution: 'temurin'
+                    java-version: |
+                        8
+                        11
+                        17
+                        21
+                    cache: 'maven'
                     server-id: github
 
-            -   name: Configure Maven credentials
+            -   name: Check that the tag matches a release version of the POM
                 run: |
-                    echo '<settings><servers><server><id>github</id><username>${{ github.actor }}</username><password>${{ secrets.GITHUB_TOKEN }}</password></server></servers></settings>' > ~/.m2/settings.xml
+                    version="$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)"
+                    if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+                        echo "::error::Tag ${GITHUB_REF_NAME} does not match the POM version ${version}."
+                        exit 1
+                    fi
+                    case "${version}" in
+                        *-SNAPSHOT) echo "::error::${version} is a SNAPSHOT: set a release version before tagging."; exit 1 ;;
+                    esac
 
-            -   name: Build with Maven
-                run: mvn clean package
-
-            -   name: Upload to GitHub Packages
-                run: mvn deploy -DskipTests
+            # Builds and tests once, then deploys. Only the parent POM and the plugin are published; the internal
+            # modules (common, jdk8, jdk21) are embedded in the plugin JAR and skip the deploy.
+            -   name: Build, test and publish to GitHub Packages
+                run: mvn -B deploy
+                env:
+                    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
