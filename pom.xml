@@ -21,7 +21,7 @@
 	-->
 	<groupId>io.github.eliaschacon</groupId>
 	<artifactId>version-propagator-parent</artifactId>
-	<version>1.0.2</version>
+	<version>1.0.3-SNAPSHOT</version>
 	<packaging>pom</packaging>
 
 	<name>Version Propagator Plugin (parent)</name>
