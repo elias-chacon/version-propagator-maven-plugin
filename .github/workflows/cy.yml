@@ -1,0 +1,38 @@
+name: CI
+
+on:
+    push:
+        branches: [ main/jdk8 ]
+    pull_request:
+        branches: [ main/jdk8 ]
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            -   uses: actions/checkout@v5
+
+            -   name: Set up JDK
+                uses: actions/setup-java@v5
+                with:
+                    java-version: '1.8'
+                    distribution: 'temurin'
+
+            -   name: Build and run tests
+                run: mvn clean verify
+
+            -   name: Generate Jacoco badge
+                uses: cicirello/jacoco-badge-generator@v2
+                with:
+                    generate-branches-badge: true
+                    jacoco-csv-file: target/site/jacoco/jacoco.csv
+
+            -   name: Upload coverage to Codecov
+                uses: codecov/codecov-action@v5
+                with:
+                    token: ${{ secrets.CODECOV_TOKEN }}
+                    files: target/jacoco-report/jacoco.xml
+                    directory: target/jacoco-report
+                    flags: unittests
+                    name: codecov-umbrella
