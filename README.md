@@ -8,7 +8,7 @@
 [![codecov](https://codecov.io/gh/elias-chacon/version-propagator-maven-plugin/graph/badge.svg?token=syFvGZQXLV)](https://codecov.io/gh/elias-chacon/version-propagator-maven-plugin)
 [![GitHub issues](https://img.shields.io/github/issues/elias-chacon/version-propagator-maven-plugin)](https://github.com/elias-chacon/version-propagator-maven-plugin/issues)
 
-**Version:** v1.0.2-SNAPSHOT
+**Version:** v1.0.2
 **Updated:** 2026-09-30
 
 A Maven plugin with one goal, `bump`. It:
@@ -20,7 +20,7 @@ A Maven plugin with one goal, `bump`. It:
 5. lists each file it changed, skipped or found no match in,
 6. has a dry-run mode that writes nothing.
 
-Coordinates: `io.github.eliaschacon:version-propagator-maven-plugin:1.0.2-SNAPSHOT`, goal prefix `propagate`.
+Coordinates: `io.github.eliaschacon:version-propagator-maven-plugin:1.0.2`, goal prefix `propagate`.
 The goal is still `bump` (`mvn propagate:bump`) and parameters keep the `bump.*` prefix (`-Dbump.part=minor`).
 Base package: `io.github.eliaschacon.versionbump`. To publish under other coordinates, change the
 `groupId` in the parent `pom.xml`, the `artifactId` in `plugin/pom.xml` and the `goalPrefix` there.
@@ -145,7 +145,7 @@ Declare the plugin in the consumer `pom.xml`:
         <plugin>
             <groupId>io.github.eliaschacon</groupId>
             <artifactId>version-propagator-maven-plugin</artifactId>
-            <version>1.0.2-SNAPSHOT</version>
+            <version>1.0.2</version>
             <configuration>
                 <updateFiles>true</updateFiles>
                 <includes>
@@ -165,7 +165,7 @@ When the plugin is declared in the POM, the short prefix works: `mvn propagate:b
 Without a declaration, use the full coordinates:
 
 ```bash
-mvn io.github.eliaschacon:version-propagator-maven-plugin:1.0.2-SNAPSHOT:bump -Dbump.part=patch
+mvn io.github.eliaschacon:version-propagator-maven-plugin:1.0.2:bump -Dbump.part=patch
 ```
 
 > Maven rule: a value set in `<configuration>` in the POM always wins over the matching `-Dbump.*`
@@ -183,7 +183,7 @@ mvn propagate:bump -Dbump.part=build   # 1.2.3 -> 1.2.3.1   1.2.3.4 -> 1.2.3.5
 Dry run (nothing is written):
 
 ```bash
-mvn io.github.eliaschacon:version-propagator-maven-plugin:1.0.2-SNAPSHOT:bump \
+mvn io.github.eliaschacon:version-propagator-maven-plugin:1.0.2:bump \
   -Dbump.part=minor \
   -Dbump.dryRun=true
 ```
@@ -219,9 +219,9 @@ mvn propagate:bump -Dbump.part=patch -Dbump.updatePom=false -Dbump.updateFiles=t
 ### Real execution (sample multi-module project)
 
 ```text
-$ mvn -f sample/pom.xml io.github.eliaschacon:version-propagator-maven-plugin:1.0.2-SNAPSHOT:bump \
+$ mvn -f sample/pom.xml io.github.eliaschacon:version-propagator-maven-plugin:1.0.2:bump \
       -Dbump.part=patch -Dbump.createBackup=true -Dbump.files=config/build.properties,config/application.yaml
-[INFO] --- propagate:1.0.2-SNAPSHOT:bump (default-cli) @ sample ---
+[INFO] --- propagate:1.0.2:bump (default-cli) @ sample ---
 [INFO] Bumping patch: 1.2.3-SNAPSHOT -> 1.2.4-SNAPSHOT
 [INFO] [update] pom.xml (1 replacement(s), POM 1.2.3-SNAPSHOT -> 1.2.4-SNAPSHOT)
 [INFO] [update] core/pom.xml (1 replacement(s), POM 1.2.3-SNAPSHOT -> 1.2.4-SNAPSHOT)
