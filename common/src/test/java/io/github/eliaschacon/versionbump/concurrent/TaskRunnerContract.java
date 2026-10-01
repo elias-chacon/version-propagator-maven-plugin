@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
@@ -65,6 +66,29 @@ public abstract class TaskRunnerContract {
 		BumpException e = assertThrows(BumpException.class, () -> runner.runAll(tasks));
 
 		assertSame(first, e);
+	}
+
+	@Test
+	void failsBeforeRunningAnyTaskAndKeepsTheFlagWhenTheCallerIsInterrupted() {
+		AtomicInteger calls = new AtomicInteger();
+		List<TaskRunner.Task<String>> tasks = new ArrayList<>();
+		for (int i = 0; i < 5; i++) {
+			tasks.add(() -> {
+				calls.incrementAndGet();
+				return "ok";
+			});
+		}
+		TaskRunner runner = runner();
+		Thread.currentThread().interrupt();
+		try {
+			BumpException e = assertThrows(BumpException.class, () -> runner.runAll(tasks));
+
+			assertEquals(TaskRunner.INTERRUPTED_MESSAGE, e.getMessage());
+			assertTrue(Thread.currentThread().isInterrupted(), "the interrupt flag must be kept");
+			assertEquals(0, calls.get(), "no task may run");
+		} finally {
+			Thread.interrupted();
+		}
 	}
 
 	@Test

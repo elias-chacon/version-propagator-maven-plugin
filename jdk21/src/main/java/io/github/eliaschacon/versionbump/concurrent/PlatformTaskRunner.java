@@ -25,6 +25,8 @@ public final class PlatformTaskRunner implements TaskRunner {
 
 	@Override
 	public <T> List<T> runAll(List<Task<T>> tasks) throws BumpException {
+		// Checked up front (see TaskRunner): Future.get() only notices an interrupt while it waits.
+		TaskRunner.failIfInterrupted();
 		List<Future<T>> futures = new ArrayList<>(tasks.size());
 		// close() waits for every task, so no work outlives this call.
 		try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -44,7 +46,7 @@ public final class PlatformTaskRunner implements TaskRunner {
 			return future.get();
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
-			throw new BumpException("Interrupted while planning the bump.", e);
+			throw new BumpException(INTERRUPTED_MESSAGE, e);
 		} catch (ExecutionException e) {
 			Throwable cause = e.getCause();
 			if (cause instanceof BumpException bump) {

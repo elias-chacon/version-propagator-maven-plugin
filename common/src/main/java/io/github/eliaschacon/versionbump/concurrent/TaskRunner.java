@@ -16,10 +16,27 @@ import io.github.eliaschacon.versionbump.BumpException;
  *     <li>results are returned in task order;</li>
  *     <li>if tasks fail, the failure of the first failing task (in task order) is thrown, so errors are
  *     deterministic;</li>
+ *     <li>if the calling thread is already interrupted, {@code runAll} fails with a {@link BumpException} before
+ *     running any task and keeps the interrupt flag set (see {@link #failIfInterrupted()});</li>
  *     <li>tasks must not write files: writing stays sequential and transactional.</li>
  * </ul>
  */
 public interface TaskRunner {
+
+	/** Message of the {@link BumpException} thrown when the caller is interrupted. */
+	String INTERRUPTED_MESSAGE = "Interrupted while planning the bump.";
+
+	/**
+	 * Contract check shared by every implementation, called before running any task. The interrupt flag is only
+	 * read, never cleared, so the caller still sees it.
+	 *
+	 * @throws BumpException when the calling thread is interrupted
+	 */
+	static void failIfInterrupted() throws BumpException {
+		if (Thread.currentThread().isInterrupted()) {
+			throw new BumpException(INTERRUPTED_MESSAGE);
+		}
+	}
 
 	/**
 	 * A unit of work that may fail with a {@link BumpException}.
@@ -38,7 +55,8 @@ public interface TaskRunner {
 	/**
 	 * Runs all tasks and returns their results in task order.
 	 *
-	 * @throws BumpException the failure of the first failing task, in task order
+	 * @throws BumpException the failure of the first failing task, in task order, or {@link #INTERRUPTED_MESSAGE}
+	 *                       when the caller is interrupted
 	 */
 	<T> List<T> runAll(List<Task<T>> tasks) throws BumpException;
 }

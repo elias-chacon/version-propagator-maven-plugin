@@ -1,6 +1,8 @@
 package io.github.eliaschacon.versionbump.concurrent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,6 +12,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
@@ -122,16 +126,32 @@ class PlatformTaskRunnerTest extends TaskRunnerContract {
 	}
 
 	@Test
-	void failsAndKeepsTheInterruptFlagWhenTheCallerIsInterrupted() {
-		List<TaskRunner.Task<String>> tasks = List.of(() -> "ok");
-		Thread.currentThread().interrupt();
-		try {
-			BumpException e = assertThrows(BumpException.class, () -> runner.runAll(tasks));
+	void failsWhenTheCallerIsInterruptedWhileWaiting() throws Exception {
+		CountDownLatch started = new CountDownLatch(1);
+		CountDownLatch never = new CountDownLatch(1);
+		List<TaskRunner.Task<Boolean>> tasks = List.of(() -> {
+			started.countDown();
+			// Blocks until the runner cancels it (shutdownNow interrupts it when runAll ends).
+			return await(never);
+		});
+		AtomicReference<Throwable> failure = new AtomicReference<>();
+		AtomicBoolean interruptFlagKept = new AtomicBoolean();
+		Thread caller = Thread.ofPlatform().start(() -> {
+			try {
+				runner.runAll(tasks);
+			} catch (Throwable t) {
+				failure.set(t);
+			}
+			interruptFlagKept.set(Thread.currentThread().isInterrupted());
+		});
 
-			assertTrue(e.getMessage().contains("Interrupted"), e.getMessage());
-			assertTrue(Thread.currentThread().isInterrupted());
-		} finally {
-			Thread.interrupted();
-		}
+		assertTrue(started.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+		caller.interrupt();
+		caller.join(TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
+
+		assertFalse(caller.isAlive(), "runAll must return after an interrupt");
+		assertInstanceOf(BumpException.class, failure.get());
+		assertTrue(failure.get().getMessage().contains("Interrupted"), failure.get().getMessage());
+		assertTrue(interruptFlagKept.get());
 	}
 }

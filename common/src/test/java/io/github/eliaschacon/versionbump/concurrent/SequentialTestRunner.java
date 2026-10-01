@@ -19,6 +19,7 @@ public final class SequentialTestRunner implements TaskRunner {
 
 	@Override
 	public <T> List<T> runAll(List<Task<T>> tasks) throws BumpException {
+		TaskRunner.failIfInterrupted();
 		List<T> results = new ArrayList<>(tasks.size());
 		for (Task<T> task : tasks) {
 			results.add(task.call());
