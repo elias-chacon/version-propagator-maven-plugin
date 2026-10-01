@@ -5,7 +5,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/elias-chacon/version-propagator-maven-plugin)](https://github.com/elias-chacon/version-propagator-maven-plugin/issues)
 ![Coverage Badge](.github/badges/jacoco.svg)
 
-![Version](https://img.shields.io/static/v1?label=Version&message=v1.1.0-SNAPSHOT&color=blue)
+![Version](https://img.shields.io/static/v1?label=Version&message=v1.1.0&color=blue)
 ![Updated](https://img.shields.io/static/v1?label=Updated&message=2026-09-30&color=green)
 ![Java](https://img.shields.io/badge/Java-8%20to%2021%2B-blue)
 ![Maven](https://img.shields.io/badge/Maven-3.6.3%2B-C71A36)
@@ -20,7 +20,7 @@ A Maven plugin that changes the project version and propagates it to other files
 POMs keep their formatting byte for byte, other versions (dependencies, plugins) are never touched, every change is
 planned before anything is written, and a dry run shows the plan.
 
-Coordinates: `io.github.eliaschacon:version-propagator-maven-plugin:1.1.0-SNAPSHOT`, goal prefix `propagate`
+Coordinates: `io.github.eliaschacon:version-propagator-maven-plugin:1.1.0`, goal prefix `propagate`
 (`mvn propagate:bump`), parameters `bump.*`. One Multi-Release JAR runs on Java 8 to 21+ (Maven 3.6.3+) with no
 runtime dependencies.
 
@@ -55,7 +55,7 @@ mvn propagate:bump -Dbump.part=patch -Dbump.dryRun=true         # plan only, not
 ```
 
 Without a declaration in the POM, use the full coordinates
-(`mvn io.github.eliaschacon:version-propagator-maven-plugin:1.1.0-SNAPSHOT:bump -Dbump.part=patch`) and pass the
+(`mvn io.github.eliaschacon:version-propagator-maven-plugin:1.1.0:bump -Dbump.part=patch`) and pass the
 files on the command line (`-Dbump.updateFiles=true -Dbump.files=README.md "-Dbump.includes=**/*.yaml"`).
 A value configured in the POM always wins over the matching `-Dbump.*` property.
 
