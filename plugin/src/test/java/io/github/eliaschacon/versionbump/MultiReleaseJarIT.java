@@ -47,7 +47,10 @@ class MultiReleaseJarIT {
 				jar.getManifest().getMainAttributes().getValue("Automatic-Module-Name"));
 			for (String entry : Arrays.asList(
 				"META-INF/maven/plugin.xml",
+				"META-INF/plexus/components.xml",
 				"io/github/eliaschacon/versionbump/BumpMojo.class",
+				"io/github/eliaschacon/versionbump/SyncMojo.class",
+				"io/github/eliaschacon/versionbump/hook/VersionHookParticipant.class",
 				"io/github/eliaschacon/versionbump/BumpService.class",
 				"io/github/eliaschacon/versionbump/concurrent/TaskRunner.class",
 				RUNNER_ENTRY,

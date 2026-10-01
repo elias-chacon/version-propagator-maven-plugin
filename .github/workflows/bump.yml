@@ -1,0 +1,57 @@
+name: Bump version
+
+# Manual version bump with the plugin itself, resolved from GitHub Packages (profile "bump" of the parent POM).
+# Updates the parent POM, the <parent><version> of every module and README.md in one commit on the selected branch.
+# It does not tag nor release: push a tag "v<version>" afterwards to run release.yml.
+on:
+    workflow_dispatch:
+        inputs:
+            part:
+                description: 'Version part to increment'
+                required: true
+                default: 'patch'
+                type: choice
+                options: [ major, minor, patch, build ]
+            dry-run:
+                description: 'Only show the planned changes (no commit)'
+                required: true
+                default: true
+                type: boolean
+
+jobs:
+    bump:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            packages: read
+
+        steps:
+            -   uses: actions/checkout@v5
+
+            -   name: Set up JDK 21
+                uses: actions/setup-java@v5
+                with:
+                    distribution: 'temurin'
+                    java-version: '21'
+                    cache: 'maven'
+
+            # .mvn/bump-settings.xml authenticates to GitHub Packages with GITHUB_ACTOR and GITHUB_TOKEN.
+            -   name: Bump the version
+                run: >
+                    mvn -B -s .mvn/bump-settings.xml -Pbump propagate:bump
+                    -Dbump.part=${{ inputs.part }}
+                    -Dbump.dryRun=${{ inputs.dry-run }}
+                env:
+                    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            # A push made with GITHUB_TOKEN does not trigger other workflows: CI runs again on the next push or tag.
+            -   name: Commit and push
+                if: ${{ !inputs.dry-run }}
+                run: |
+                    version="$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)"
+                    git config user.name 'github-actions[bot]'
+                    git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+                    git commit -am "chore: bump version to ${version}"
+                    git push
+                    echo "### Version bumped to ${version}" >> "${GITHUB_STEP_SUMMARY}"
+                    echo "Tag it to release: \`git tag v${version} && git push origin v${version}\`" >> "${GITHUB_STEP_SUMMARY}"

@@ -85,6 +85,34 @@ class BumpMojoTest {
 	}
 
 	@Test
+	void mapsTheVersionOptions() throws Exception {
+		BumpMojo mojo = mojo(null);
+		mojo.newVersion = "2.0.0-RC1";
+		mojo.snapshot = Boolean.TRUE;
+		mojo.qualifier = "none";
+
+		BumpRequest request = mojo.toRequest();
+
+		assertEquals("2.0.0-RC1", request.getNewVersion());
+		assertEquals(Boolean.TRUE, request.getSnapshot());
+		assertEquals("none", request.getQualifier());
+	}
+
+	@Test
+	void setsAnExplicitVersionInPomModulesAndFiles() throws Exception {
+		BumpMojo mojo = mojo(null);
+		mojo.newVersion = "1.0.0-RC1";
+		mojo.updateFiles = true;
+		mojo.files = Collections.singletonList(new File("app.yaml"));
+
+		mojo.execute();
+
+		assertTrue(read("pom.xml").contains("<version>1.0.0-RC1</version>"));
+		assertTrue(read("child/pom.xml").contains("<version>1.0.0-RC1</version>"));
+		assertEquals("version: 1.0.0-RC1\n", read("app.yaml"));
+	}
+
+	@Test
 	void dryRunDoesNotWrite() throws Exception {
 		BumpMojo mojo = mojo("major");
 		mojo.dryRun = true;

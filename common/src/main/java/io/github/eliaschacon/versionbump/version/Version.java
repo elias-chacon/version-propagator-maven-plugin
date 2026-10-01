@@ -28,13 +28,15 @@ public final class Version {
 		+ " Components must be non-negative integers without leading zeros";
 
 	private static final String NUMBER = "(0|[1-9]\\d*)";
+	private static final String QUALIFIER_CHARS = "[0-9A-Za-z][0-9A-Za-z.-]*";
+	private static final Pattern QUALIFIER_PATTERN = Pattern.compile(QUALIFIER_CHARS);
 	/*
 	 * The qualifier is matched with a plain character class (no repeated group, which Java evaluates
 	 * recursively and may overflow the stack on long input); separators are validated in isValidQualifier.
 	 */
 	private static final Pattern PATTERN = Pattern.compile(
 		NUMBER + "\\." + NUMBER + "\\." + NUMBER + "(?:\\." + NUMBER + ")?"
-			+ "(?:-([0-9A-Za-z][0-9A-Za-z.-]*))?");
+			+ "(?:-(" + QUALIFIER_CHARS + "))?");
 
 	private final int major;
 	private final int minor;
@@ -109,6 +111,10 @@ public final class Version {
 	public Version bump(VersionPart part, QualifierPolicy policy) throws BumpException {
 		Objects.requireNonNull(part, "part");
 		Objects.requireNonNull(policy, "policy");
+		if (part == VersionPart.RELEASE) {
+			// Only the suffix changes: the qualifier policy (about incrementing numbers) does not apply.
+			return release();
+		}
 
 		String nextQualifier = qualifier;
 		if (qualifier != null) {
@@ -144,6 +150,40 @@ public final class Version {
 			throw new BumpException("Cannot increment " + component + " of version '" + this + "': value too large.");
 		}
 		return value + 1;
+	}
+
+	/**
+	 * Drops {@code -SNAPSHOT}: {@code 1.2.3-RC1-SNAPSHOT} becomes {@code 1.2.3-RC1}.
+	 *
+	 * @throws BumpException when the version is not a SNAPSHOT
+	 */
+	public Version release() throws BumpException {
+		if (!snapshot) {
+			throw new BumpException("Version '" + this + "' is not a SNAPSHOT: there is nothing to release."
+				+ " Use bump.part=major|minor|patch|build or bump.newVersion instead.");
+		}
+		return withSnapshot(false);
+	}
+
+	/**
+	 * @return the same numbers and qualifier, with or without {@code -SNAPSHOT}
+	 */
+	public Version withSnapshot(boolean value) {
+		return new Version(major, minor, patch, build, qualifier, value);
+	}
+
+	/**
+	 * Sets, replaces or (with {@code null} or a blank value) removes the qualifier, e.g. {@code RC1}.
+	 *
+	 * @throws BumpException when the qualifier is not valid in a version
+	 */
+	public Version withQualifier(String value) throws BumpException {
+		String next = value == null || value.trim().isEmpty() ? null : value.trim();
+		if (next != null && (!QUALIFIER_PATTERN.matcher(next).matches() || !isValidQualifier(next))) {
+			throw new BumpException("Invalid qualifier '" + value + "': use letters and digits separated by single"
+				+ " '.' or '-' (e.g. RC1, beta.2), without SNAPSHOT (see bump.snapshot).");
+		}
+		return new Version(major, minor, patch, build, next, snapshot);
 	}
 
 	/**

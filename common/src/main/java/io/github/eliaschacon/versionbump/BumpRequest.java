@@ -28,6 +28,12 @@ public final class BumpRequest {
 	private String projectVersion;
 
 	private String part;
+	/** Explicit next version; exclusive with {@code part} (see {@code VersionChange}). */
+	private String newVersion;
+	/** {@code true}/{@code false} adds/drops {@code -SNAPSHOT} after {@code part}; {@code null} keeps it. */
+	private Boolean snapshot;
+	/** Sets or replaces the qualifier after {@code part} ({@code none} removes it); {@code null} keeps it. */
+	private String qualifier;
 	@Builder.Default
 	private String qualifierPolicy = "fail";
 	private boolean dryRun;

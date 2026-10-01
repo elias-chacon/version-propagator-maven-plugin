@@ -42,6 +42,22 @@ public final class PomFile {
 	}
 
 	/**
+	 * Parses POM content that is not (or not only) on disk, e.g. a previous revision read from git or a
+	 * {@code pom.xml.releaseBackup}. {@code path} identifies the content in messages.
+	 */
+	public static PomFile parse(Path path, byte[] bytes) throws BumpException {
+		return new PomFile(path, bytes.clone(), PomParser.parse(bytes, path.toString()));
+	}
+
+	/**
+	 * @return the project version: its own {@code <version>}, or the parent's when inherited ({@code null} if none)
+	 */
+	public String version() {
+		String own = document.value(PomDocument.PROJECT_VERSION);
+		return own != null ? own : document.value(PomDocument.PARENT_VERSION);
+	}
+
+	/**
 	 * Defensive copy: the original bytes are needed intact for rollback.
 	 */
 	public byte[] getBytes() {

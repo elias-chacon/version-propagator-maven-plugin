@@ -21,7 +21,7 @@
 	-->
 	<groupId>io.github.eliaschacon</groupId>
 	<artifactId>version-propagator-parent</artifactId>
-	<version>1.0.4</version>
+	<version>1.1.0-SNAPSHOT</version>
 	<packaging>pom</packaging>
 
 	<name>Version Propagator Plugin (parent)</name>
@@ -372,6 +372,102 @@
 					<plugin>
 						<groupId>org.sonarsource.scanner.maven</groupId>
 						<artifactId>sonar-maven-plugin</artifactId>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!--
+			Version bump of this project with the plugin itself, as published on GitHub Packages (dogfooding):
+				mvn -s .mvn/bump-settings.xml -Pbump propagate:bump -Dbump.part=patch
+			Updates, in one transaction: the parent version, the <parent><version> of every module and the versions
+			in README.md. The plugin version is written literally (here and in the "hook" profile): maven-release-plugin
+			rewrites references to reactor artifacts and fails on an expression. It must be a published release that differs
+			from the project version. GitHub Packages needs authentication even to read: GITHUB_ACTOR and GITHUB_TOKEN
+			(read:packages) are read by .mvn/bump-settings.xml. Helpers: bump.bat / bump.sh. CI: .github/workflows/bump.yml.
+		-->
+		<profile>
+			<id>bump</id>
+			<pluginRepositories>
+				<pluginRepository>
+					<id>github</id>
+					<url>https://maven.pkg.github.com/elias-chacon/version-propagator-maven-plugin</url>
+					<releases>
+						<enabled>true</enabled>
+					</releases>
+					<snapshots>
+						<enabled>false</enabled>
+					</snapshots>
+				</pluginRepository>
+			</pluginRepositories>
+			<!--
+				pluginManagement, not plugins: a plugin in <build><plugins> whose version equals the reactor version
+				(e.g. project 1.0.4 bumped with plugin 1.0.4) is treated as a dependency on the "plugin" module and
+				Maven reports a cyclic reference. Managed plugins only give the version and configuration to the
+				goal invoked on the command line (propagate:bump).
+			-->
+			<build>
+				<pluginManagement>
+					<plugins>
+						<plugin>
+							<groupId>io.github.eliaschacon</groupId>
+							<artifactId>version-propagator-maven-plugin</artifactId>
+							<version>1.0.4</version>
+							<configuration>
+								<!-- The POMs (parent and modules) are always updated; these are the other files. -->
+								<updateFiles>true</updateFiles>
+								<!--
+									README.md: only these four patterns are updated (custom rules replace the default rule, so no
+									other occurrence of the version is touched). Each rule selects README.md through its <files>.
+									Tokens use the @name@ form because Maven interpolates ${...} in the POM; "&lt;" and "&amp;"
+									are XML escapes. The suffix lookahead keeps longer versions (1.0.40, 1.0.4.1, 1.0.4-RC1) intact.
+								-->
+								<replacements>
+									<!-- Badge: ...&message=v1.0.4&color=blue -->
+									<replacement>
+										<files><file>README.md</file></files>
+										<search>(message=v)@oldVersion@(?![0-9A-Za-z_]|\.[0-9]|-[0-9A-Za-z])</search>
+										<replace>$1@newVersion@</replace>
+									</replacement>
+									<!-- Coordinates and command lines: io.github.eliaschacon:version-propagator-maven-plugin:1.0.4 -->
+									<replacement>
+										<files><file>README.md</file></files>
+										<search>(io\.github\.eliaschacon:version-propagator-maven-plugin:)@oldVersion@(?![0-9A-Za-z_]|\.[0-9]|-[0-9A-Za-z])</search>
+										<replace>$1@newVersion@</replace>
+									</replacement>
+									<!-- Maven log line of the execution example: propagate:1.0.4:bump -->
+									<replacement>
+										<files><file>README.md</file></files>
+										<search>(propagate:)@oldVersion@(?![0-9A-Za-z_]|\.[0-9]|-[0-9A-Za-z])</search>
+										<replace>$1@newVersion@</replace>
+									</replacement>
+								</replacements>
+								<!-- The README must contain the old version in at least one of these patterns: otherwise stop. -->
+								<failOnNoMatch>true</failOnNoMatch>
+							</configuration>
+						</plugin>
+					</plugins>
+				</pluginManagement>
+			</build>
+		</profile>
+
+		<!--
+			Lifecycle hook for this project (plugin 1.1.0+): together with "bump", release:update-versions and
+			versions:set propagate the new version to README.md with the rules of the "bump" profile:
+				mvn -s .mvn/bump-settings.xml -Pbump,hook release:update-versions -DdevelopmentVersion=1.2.0-SNAPSHOT
+			Kept apart from "bump": a plugin declared in <build><plugins> (needed for <extensions>) whose version equals
+			the project version makes Maven report a cyclic reference, so the plugin version must differ from the project
+			version whenever this profile is active.
+		-->
+		<profile>
+			<id>hook</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>io.github.eliaschacon</groupId>
+						<artifactId>version-propagator-maven-plugin</artifactId>
+						<version>1.0.4</version>
+						<extensions>true</extensions>
 					</plugin>
 				</plugins>
 			</build>

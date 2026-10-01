@@ -2,6 +2,7 @@ package io.github.eliaschacon.versionbump;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -13,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,6 +29,7 @@ import io.github.eliaschacon.versionbump.concurrent.SequentialTestRunner;
 import io.github.eliaschacon.versionbump.concurrent.TaskRunner;
 import io.github.eliaschacon.versionbump.files.FileReplacer;
 import io.github.eliaschacon.versionbump.files.ReplacementRule;
+import io.github.eliaschacon.versionbump.version.Version;
 
 /**
  * End-to-end tests of the bump workflow on temporary projects.
@@ -393,6 +396,97 @@ class BumpServiceTest {
 		}
 		assertEquals(Arrays.asList("config/app.yaml", "config/none.yaml"), names);
 		assertEquals("app:\n  version: 1.2.4\n  other: 11.2.30\n", read("config/app.yaml"));
+	}
+
+	@Test
+	void setsAnExplicitVersionOrAReleaseCandidate() throws Exception {
+		BumpResult rc = run(request("minor").qualifier("RC1").updateFiles(true)
+			.files(Collections.singletonList(base.resolve("config/app.properties"))));
+		assertEquals("1.3.0-RC1", rc.getNewVersion().toString());
+		assertTrue(read("pom.xml").contains("<artifactId>app</artifactId>\n  <version>1.3.0-RC1</version>"));
+		assertEquals("version=1.3.0-RC1\n", read("config/app.properties"));
+
+		BumpResult snapshot = run(request(null).projectVersion("1.3.0-RC1").newVersion("1.3.0-SNAPSHOT"));
+		assertEquals("1.3.0-SNAPSHOT", snapshot.getNewVersion().toString());
+		assertTrue(read("pom.xml").contains("<artifactId>app</artifactId>\n  <version>1.3.0-SNAPSHOT</version>"));
+
+		BumpResult release = run(request("release").projectVersion("1.3.0-SNAPSHOT"));
+		assertEquals("1.3.0", release.getNewVersion().toString());
+		BumpResult next = run(request("patch").projectVersion("1.3.0").snapshot(true));
+		assertEquals("1.3.1-SNAPSHOT", next.getNewVersion().toString());
+		assertTrue(read("pom.xml").contains("<artifactId>app</artifactId>\n  <version>1.3.1-SNAPSHOT</version>"));
+	}
+
+	private static Map<Version, Version> change(String... versions) throws BumpException {
+		Map<Version, Version> changes = new LinkedHashMap<>();
+		for (int i = 0; i < versions.length; i += 2) {
+			changes.put(Version.parse(versions[i]), Version.parse(versions[i + 1]));
+		}
+		return changes;
+	}
+
+	@Test
+	void propagatesToTheConfiguredFilesWithoutTouchingThePoms() throws Exception {
+		BumpResult result = service.propagate(request(null).updatePom(false).updateFiles(true)
+			.includes(Collections.singletonList("config/*.yaml")).build(), change("1.2.3", "2.0.0-SNAPSHOT"));
+
+		assertTrue(result.isWritten());
+		assertEquals("app:\n  version: 2.0.0-SNAPSHOT\n  other: 11.2.30\n", read("config/app.yaml"));
+		assertEquals(POM, read("pom.xml"));
+		assertEquals("version=1.2.3\n", read("config/app.properties"), "not configured");
+	}
+
+	@Test
+	void propagatesEveryDistinctPair() throws Exception {
+		write("config/modules.properties", "core=1.2.3\napi=0.9.0\nother=0.8.0\n");
+
+		BumpResult result = service.propagate(request(null).updateFiles(true)
+				.files(Collections.singletonList(base.resolve("config/modules.properties"))).build(),
+			change("1.2.3", "1.3.0", "0.9.0", "0.10.0", "0.8.0", "0.8.0"));
+
+		assertEquals("core=1.3.0\napi=0.10.0\nother=0.8.0\n", read("config/modules.properties"));
+		assertEquals("1.2.3", result.getOldVersion().toString());
+	}
+
+	@Test
+	void propagationDoesNothingWithoutChangesOrConfiguredFiles() throws Exception {
+		Map<String, byte[]> before = snapshot();
+
+		assertNull(service.propagate(request(null).updateFiles(true)
+			.includes(Collections.singletonList("**/*.yaml")).build(), change("1.2.3", "1.2.3")));
+		assertNull(service.propagate(request(null).updateFiles(true).build(), change("1.2.3", "1.2.4")));
+		assertNull(service.propagate(request(null).updateFiles(true)
+			.replacements(Collections.singletonList(ReplacementRule.defaultRule())).build(), change("1.2.3", "1.2.4")));
+
+		assertUnchanged(before);
+	}
+
+	@Test
+	void propagationRejectsChainedChanges() throws Exception {
+		Map<String, byte[]> before = snapshot();
+		BumpRequest request = request(null).updateFiles(true).includes(Collections.singletonList("**/*.yaml")).build();
+		Map<Version, Version> chained = change("1.2.3", "1.2.4", "1.2.4", "1.2.5");
+
+		BumpException e = assertThrows(BumpException.class, () -> service.propagate(request, chained));
+
+		assertTrue(e.getMessage().contains("Ambiguous"), e.getMessage());
+		assertUnchanged(before);
+	}
+
+	@Test
+	void propagationHonoursDryRunAndFailOnNoMatch() throws Exception {
+		Map<String, byte[]> before = snapshot();
+		BumpResult dryRun = service.propagate(request(null).dryRun(true).updateFiles(true)
+			.includes(Collections.singletonList("**/*.yaml")).build(), change("1.2.3", "1.2.4"));
+		assertFalse(dryRun.isWritten());
+		assertTrue(dryRun.changes(base.resolve("config/app.yaml")));
+		assertUnchanged(before);
+
+		BumpRequest noMatch = request(null).updateFiles(true).failOnNoMatch(true)
+			.files(Collections.singletonList(base.resolve("config/none.yaml"))).build();
+		Map<Version, Version> changes = change("1.2.3", "1.2.4");
+		BumpException e = assertThrows(BumpException.class, () -> service.propagate(noMatch, changes));
+		assertTrue(e.getMessage().contains("No occurrence of version 1.2.3"), e.getMessage());
 	}
 
 	@Test

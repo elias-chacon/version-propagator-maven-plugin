@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	Registers the lifecycle hook. Maven loads this descriptor only when the plugin is declared with
+	<extensions>true</extensions>; without it the plugin behaves as a plain plugin.
+-->
+<component-set>
+	<components>
+		<component>
+			<role>org.apache.maven.AbstractMavenLifecycleParticipant</role>
+			<role-hint>version-propagator</role-hint>
+			<implementation>io.github.eliaschacon.versionbump.hook.VersionHookParticipant</implementation>
+			<description>Propagates project version changes (release:update-versions, versions:set) to the configured
+				files.
+			</description>
+		</component>
+	</components>
+</component-set>
